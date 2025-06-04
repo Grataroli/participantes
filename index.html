@@ -1,24 +1,28 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Sorteio de Números</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
-      max-width: 600px;
+      max-width: 550px;
       margin: auto;
-      padding: 2rem;
+      padding: 1rem;
+      overflow-x: hidden;
     }
 
     form {
       display: flex;
-      gap: 1rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
       margin-bottom: 1rem;
     }
 
     input {
-      flex: 1;
+      flex: 1 1 10%;
       padding: 0.5rem;
     }
 
@@ -27,16 +31,30 @@
       cursor: pointer;
     }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
+    .info-box {
+      font-weight: bold;
+      margin-bottom: 1rem;
+      font-size: 1rem;
+    }
+
+    .tabela-wrapper {
+      max-height: 300px;
+      overflow: auto;
+      border: 1px solid #ccc;
       margin-top: 1rem;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 600px;
     }
 
     th, td {
       padding: 0.5rem;
       border: 1px solid #ccc;
       text-align: left;
+      white-space: nowrap;
     }
 
     #resultado {
@@ -44,40 +62,57 @@
       font-weight: bold;
       font-size: 1.2rem;
     }
-    #grade-numeros {
-  display: grid;
-  grid-template-columns: repeat(20, 1fr);
-  gap: 4px;
-  margin-top: 2rem;
-}
 
-.numero {
-  border: 1px solid #ccc;
-  padding: 6px;
-  text-align: center;
-  position: relative;
-  background: white;
-}
+    .grid-container {
+      margin-top: 2rem;
+    }
 
-.numero.riscado::before {
-  content: "";
-  position: absolute;
-  width: 100%;
-  height: 2px;
-  background: red;
-  transform: rotate(-45deg);
-  top: 50%;
-  left: 0;
-}
+    .grade {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+      gap: 4px;
+      max-width: 100%;
+    }
 
+    .numero {
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      text-align: center;
+      font-size: 14px;
+      position: relative;
+    }
+
+    .riscado::after {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 2px;
+      background: red;
+      transform: rotate(-45deg);
+      top: 50%;
+      left: 0;
+    }
+
+    @media (max-width: 600px) {
+      .grade {
+        grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+      }
+
+      .tabela-wrapper {
+        max-width: 100%;
+        overflow-x: auto;
+      }
+    }
   </style>
 </head>
 <body>
   <h1>Sorteio de Números</h1>
 
+  <div class="info-box" id="info"></div>
+
   <form id="formulario">
-    <input type="text" id="nome" placeholder="Nome" required>
-    <input type="number" id="numero" placeholder="Número (1-500)" min="1" max="500" required>
+    <input type="text" id="nome" placeholder="Nome" required />
+    <input type="number" id="numero" placeholder="Número (1-500)" min="1" max="500" required />
     <button type="submit">Adicionar</button>
   </form>
 
@@ -87,29 +122,32 @@
 
   <div id="resultado"></div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Nome</th>
-        <th>Número</th>
-      </tr>
-    </thead>
-    <tbody id="tabela"></tbody>
-  </table>
+  <div class="tabela-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th colspan="500">Números</th>
+        </tr>
+      </thead>
+      <tbody id="tabela"></tbody>
+    </table>
+  </div>
 
-  <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+  <div class="grid-container">
+    <h3>Números Comprados</h3>
+    <div class="grade" id="grade-numeros"></div>
+  </div>
 
-    // ✅ COLE AQUI SUA URL E SUA ANON PUBLIC KEY DO SUPABASE
+  <script>
     const supabaseUrl = "https://pzbzolxtvyxvkaobfvfy.supabase.co";
     const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6YnpvbHh0dnl4dmthb2JmdmZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg5NjUxOTEsImV4cCI6MjA2NDU0MTE5MX0.2d3N8a5mdOwYXiO_QkG27PD9WehU8Kg4KG6u6AIFTiY";
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
     const form = document.getElementById("formulario");
     const tabela = document.getElementById("tabela");
     const resultado = document.getElementById("resultado");
-
-    let participantes = [];
+    const info = document.getElementById("info");
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -124,7 +162,7 @@
 
       const { data: existentes, error: erroBusca } = await supabase
         .from("participantes")
-        .select("numero")
+        .select("*")
         .eq("numero", numero);
 
       if (erroBusca) {
@@ -133,7 +171,7 @@
       }
 
       if (existentes.length > 0) {
-        alert(`O número ${numero} já foi escolhido. Escolha outro número.`);
+        alert(`O número ${numero} já foi escolhido por outra pessoa.`);
         return;
       }
 
@@ -151,30 +189,54 @@
     });
 
     async function atualizarTabela() {
-      const { data, error } = await supabase
-        .from("participantes")
-        .select("*")
-        .order("numero", { ascending: true });
+      const { data, error } = await supabase.from("participantes").select("*");
 
       if (error) {
         alert("Erro ao carregar participantes: " + error.message);
         return;
       }
 
-      participantes = data;
+      const totalNumeros = data.length;
+      const valorRifa = 5.00;
+      const valorUnitario = 2.00;
+      const totalArrecadado = totalNumeros * valorUnitario;
+
+      info.textContent = `Valor da rifa: R$ ${valorRifa.toFixed(2).replace('.', ',')} | Total arrecadado: R$ ${totalArrecadado.toFixed(2).replace('.', ',')} (${totalNumeros} números vendidos)`;
+
+      const participantesMap = new Map();
+      data.forEach(p => {
+        if (!participantesMap.has(p.nome)) {
+          participantesMap.set(p.nome, []);
+        }
+        participantesMap.get(p.nome).push(p.numero);
+      });
+
+      const participantesOrdenados = Array.from(participantesMap.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]));
+      participantesOrdenados.forEach(([nome, numeros]) => numeros.sort((a, b) => a - b));
 
       tabela.innerHTML = "";
-      participantes.forEach(p => {
+      participantesOrdenados.forEach(([nome, numeros]) => {
         const row = document.createElement("tr");
-        row.innerHTML = `<td>${p.nome}</td><td>${p.numero}</td>`;
+        row.innerHTML = `<td>${nome}</td>` + numeros.map(n => `<td>${n}</td>`).join("");
         tabela.appendChild(row);
       });
+
+      const numerosComprados = new Set(data.map(p => p.numero));
+      const grade = document.getElementById("grade-numeros");
+      grade.innerHTML = "";
+
+      for (let i = 1; i <= 500; i++) {
+        const div = document.createElement("div");
+        div.classList.add("numero");
+        div.textContent = i;
+        if (numerosComprados.has(i)) div.classList.add("riscado");
+        grade.appendChild(div);
+      }
     }
 
-    window.sortear = async function () {
-      const { data, error } = await supabase
-        .from("participantes")
-        .select("*");
+    async function sortear() {
+      const { data, error } = await supabase.from("participantes").select("*");
 
       if (error) {
         alert("Erro ao buscar dados: " + error.message);
