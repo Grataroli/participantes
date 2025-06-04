@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Pituquinha Princesa Intergalática</title>
+  <title>Sorteio de Números</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
   <style>
@@ -110,13 +110,25 @@
 
   <div class="info-box" id="info"></div>
 
-  <form id="formulario">
-    <input type="text" id="nome" placeholder="Nome" required />
-    <input type="text" id="numero" placeholder="Número(s) (1-500, separados por vírgula ou espaço)" required />
+  <h2>Adicionar Número</h2>
+  <form id="formulario-adicionar">
+    <input type="text" id="nome-adicionar" placeholder="Nome" required />
+    <input type="text" id="numero-adicionar" placeholder="Número(s) (1-500, separados por vírgula ou espaço)" required />
     <button type="submit">Adicionar</button>
   </form>
 
-  <div style="display: flex; gap: 1rem;">
+  ---
+
+  <h2>Excluir Número</h2>
+  <form id="formulario-excluir">
+    <input type="text" id="nome-excluir" placeholder="Nome (opcional)" />
+    <input type="text" id="numero-excluir" placeholder="Número(s) a excluir (separados por vírgula ou espaço)" required />
+    <button type="submit">Excluir</button>
+  </form>
+
+  ---
+
+  <div style="display: flex; gap: 1rem; margin-top: 1rem;">
     <button onclick="sortear()">Sortear Número</button>
   </div>
 
@@ -140,27 +152,30 @@
   </div>
 
   <script>
+    // **Atenção:** Substitua estes valores pelas suas chaves do Supabase!
+    // Você pode encontrá-las no painel do seu projeto Supabase, em "Settings" -> "API".
     const supabaseUrl = "https://pzbzolxtvyxvkaobfvfy.supabase.co";
     const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6YnpvbHh0dnl4dmthb2JmdmZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg5NjUxOTEsImV4cCI6MjA2NDU0MTE5MX0.2d3N8a5mdOwYXiO_QkG27PD9WehU8Kg4KG6u6AIFTiY";
     const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-    const form = document.getElementById("formulario");
+    const formAdicionar = document.getElementById("formulario-adicionar");
+    const formExcluir = document.getElementById("formulario-excluir");
     const tabela = document.getElementById("tabela");
     const resultado = document.getElementById("resultado");
     const info = document.getElementById("info");
 
-    form.addEventListener("submit", async (e) => {
+    // Event Listener para ADICIONAR números
+    formAdicionar.addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      const nome = document.getElementById("nome").value.trim();
-      const numeroInput = document.getElementById("numero").value.trim(); // Obtém o valor da string
+      const nome = document.getElementById("nome-adicionar").value.trim();
+      const numeroInput = document.getElementById("numero-adicionar").value.trim();
 
       if (!nome) {
-        alert("Preencha um nome válido.");
+        alert("Por favor, preencha um nome válido.");
         return;
       }
 
-      // Divide a entrada por vírgula ou espaço, filtra strings vazias e converte para números
       const numerosParaAdicionar = numeroInput
         .split(/[, ]+/) // Divide por uma ou mais vírgulas ou espaços
         .filter(s => s !== '') // Remove strings vazias
@@ -206,7 +221,7 @@
       if (numerosParaInserir.length > 0) {
         const { error } = await supabase
           .from("participantes")
-          .insert(numerosParaInserir); // Insere todos os números válidos de uma vez
+          .insert(numerosParaInserir);
 
         if (error) {
           alert("Erro ao salvar: " + error.message);
@@ -214,9 +229,81 @@
         }
       }
 
-      form.reset();
+      formAdicionar.reset();
       await atualizarTabela();
     });
+
+
+    // Event Listener para EXCLUIR números
+    formExcluir.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const nomeExcluir = document.getElementById("nome-excluir").value.trim(); // Opcional
+      const numeroInputExcluir = document.getElementById("numero-excluir").value.trim();
+
+      const numerosParaExcluir = numeroInputExcluir
+        .split(/[, ]+/)
+        .filter(s => s !== '')
+        .map(s => parseInt(s));
+
+      if (numerosParaExcluir.length === 0) {
+        alert("Por favor, insira pelo menos um número para excluir.");
+        return;
+      }
+
+      const numerosInvalidos = numerosParaExcluir.filter(n => isNaN(n) || n < 1 || n > 500);
+      if (numerosInvalidos.length > 0) {
+        alert(`Os seguintes números não são válidos para exclusão (devem ser entre 1 e 500): ${numerosInvalidos.join(', ')}`);
+        return;
+      }
+
+      let numerosExcluidosComSucesso = [];
+      let numerosNaoEncontrados = [];
+
+      for (const numero of numerosParaExcluir) {
+        // Busca o número para confirmar que ele existe e, opcionalmente, se o nome corresponde
+        let query = supabase.from("participantes").select("*").eq("numero", numero);
+        if (nomeExcluir) {
+          query = query.eq("nome", nomeExcluir);
+        }
+
+        const { data: existente, error: erroBusca } = await query;
+
+        if (erroBusca) {
+          alert("Erro ao buscar número para exclusão: " + erroBusca.message);
+          return;
+        }
+
+        if (existente.length > 0) {
+          const { error: erroExclusao } = await supabase
+            .from("participantes")
+            .delete()
+            .eq("numero", numero); // Exclui pelo número
+
+          if (erroExclusao) {
+            alert("Erro ao excluir o número " + numero + ": " + erroExclusao.message);
+            return;
+          }
+          numerosExcluidosComSucesso.push(numero);
+        } else {
+          numerosNaoEncontrados.push(numero);
+        }
+      }
+
+      let mensagem = [];
+      if (numerosExcluidosComSucesso.length > 0) {
+        mensagem.push(`Números excluídos com sucesso: ${numerosExcluidosComSucesso.join(', ')}.`);
+      }
+      if (numerosNaoEncontrados.length > 0) {
+        mensagem.push(`Números não encontrados ou não associados ao nome informado: ${numerosNaoEncontrados.join(', ')}.`);
+      }
+
+      alert(mensagem.join('\n')); // Exibe uma mensagem consolidada
+
+      formExcluir.reset();
+      await atualizarTabela();
+    });
+
 
     async function atualizarTabela() {
       const { data, error } = await supabase.from("participantes").select("*");
@@ -248,7 +335,6 @@
       tabela.innerHTML = "";
       participantesOrdenados.forEach(([nome, numeros]) => {
         const row = document.createElement("tr");
-        // Cria uma única célula para os números, separados por vírgula
         row.innerHTML = `<td>${nome}</td><td>${numeros.join(', ')}</td>`;
         tabela.appendChild(row);
       });
