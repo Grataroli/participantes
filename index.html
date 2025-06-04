@@ -112,7 +112,7 @@
 
   <form id="formulario">
     <input type="text" id="nome" placeholder="Nome" required />
-    <input type="number" id="numero" placeholder="Número (1-500)" min="1" max="500" required />
+    <input type="text" id="numero" placeholder="Número(s) (1-500, separados por vírgula ou espaço)" required />
     <button type="submit">Adicionar</button>
   </form>
 
@@ -127,7 +127,7 @@
       <thead>
         <tr>
           <th>Nome</th>
-          <th colspan="500">Números</th>
+          <th>Números Comprados</th>
         </tr>
       </thead>
       <tbody id="tabela"></tbody>
@@ -153,35 +153,65 @@
       e.preventDefault();
 
       const nome = document.getElementById("nome").value.trim();
-      const numero = parseInt(document.getElementById("numero").value);
+      const numeroInput = document.getElementById("numero").value.trim(); // Obtém o valor da string
 
-      if (!nome || isNaN(numero) || numero < 1 || numero > 500) {
-        alert("Preencha um nome válido e um número entre 1 e 500.");
+      if (!nome) {
+        alert("Preencha um nome válido.");
         return;
       }
 
-      const { data: existentes, error: erroBusca } = await supabase
-        .from("participantes")
-        .select("*")
-        .eq("numero", numero);
+      // Divide a entrada por vírgula ou espaço, filtra strings vazias e converte para números
+      const numerosParaAdicionar = numeroInput
+        .split(/[, ]+/) // Divide por uma ou mais vírgulas ou espaços
+        .filter(s => s !== '') // Remove strings vazias
+        .map(s => parseInt(s)); // Converte para inteiros
 
-      if (erroBusca) {
-        alert("Erro ao verificar número: " + erroBusca.message);
+      if (numerosParaAdicionar.length === 0) {
+        alert("Por favor, insira pelo menos um número válido entre 1 e 500.");
         return;
       }
 
-      if (existentes.length > 0) {
-        alert(`O número ${numero} já foi escolhido por outra pessoa.`);
+      const numerosInvalidos = numerosParaAdicionar.filter(n => isNaN(n) || n < 1 || n > 500);
+      if (numerosInvalidos.length > 0) {
+        alert(`Os seguintes números são inválidos (devem ser entre 1 e 500): ${numerosInvalidos.join(', ')}`);
         return;
       }
 
-      const { error } = await supabase
-        .from("participantes")
-        .insert([{ nome, numero }]);
+      const numerosJaExistentes = [];
+      const numerosParaInserir = [];
 
-      if (error) {
-        alert("Erro ao salvar: " + error.message);
+      for (const numero of numerosParaAdicionar) {
+        const { data: existentes, error: erroBusca } = await supabase
+          .from("participantes")
+          .select("*")
+          .eq("numero", numero);
+
+        if (erroBusca) {
+          alert("Erro ao verificar número: " + erroBusca.message);
+          return;
+        }
+
+        if (existentes.length > 0) {
+          numerosJaExistentes.push(numero);
+        } else {
+          numerosParaInserir.push({ nome, numero });
+        }
+      }
+
+      if (numerosJaExistentes.length > 0) {
+        alert(`Os seguintes números já foram escolhidos: ${numerosJaExistentes.join(', ')}`);
         return;
+      }
+
+      if (numerosParaInserir.length > 0) {
+        const { error } = await supabase
+          .from("participantes")
+          .insert(numerosParaInserir); // Insere todos os números válidos de uma vez
+
+        if (error) {
+          alert("Erro ao salvar: " + error.message);
+          return;
+        }
       }
 
       form.reset();
@@ -198,7 +228,7 @@
 
       const totalNumeros = data.length;
       const valorRifa = 5.00;
-      const valorUnitario = 2.00;
+      const valorUnitario = 5.00;
       const totalArrecadado = totalNumeros * valorUnitario;
 
       info.textContent = `Valor da rifa: R$ ${valorRifa.toFixed(2).replace('.', ',')} | Total arrecadado: R$ ${totalArrecadado.toFixed(2).replace('.', ',')} (${totalNumeros} números vendidos)`;
@@ -218,7 +248,8 @@
       tabela.innerHTML = "";
       participantesOrdenados.forEach(([nome, numeros]) => {
         const row = document.createElement("tr");
-        row.innerHTML = `<td>${nome}</td>` + numeros.map(n => `<td>${n}</td>`).join("");
+        // Cria uma única célula para os números, separados por vírgula
+        row.innerHTML = `<td>${nome}</td><td>${numeros.join(', ')}</td>`;
         tabela.appendChild(row);
       });
 
@@ -244,7 +275,7 @@
       }
 
       if (!data || data.length === 0) {
-        resultado.textContent = "Nenhum participante encontrado.";
+        resultado.textContent = "Nenhum participante encontrado para sortear.";
         return;
       }
 
