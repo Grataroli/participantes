@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Sorteio de Números</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: auto;
+      padding: 2rem;
+    }
+
+    form {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    input {
+      flex: 1;
+      padding: 0.5rem;
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+
+    th, td {
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      text-align: left;
+    }
+
+    #resultado {
+      margin-top: 1rem;
+      font-weight: bold;
+      font-size: 1.2rem;
+    }
+    #grade-numeros {
+  display: grid;
+  grid-template-columns: repeat(20, 1fr);
+  gap: 4px;
+  margin-top: 2rem;
+}
+
+.numero {
+  border: 1px solid #ccc;
+  padding: 6px;
+  text-align: center;
+  position: relative;
+  background: white;
+}
+
+.numero.riscado::before {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background: red;
+  transform: rotate(-45deg);
+  top: 50%;
+  left: 0;
+}
+
+  </style>
+</head>
+<body>
+  <h1>Sorteio de Números</h1>
+
+  <form id="formulario">
+    <input type="text" id="nome" placeholder="Nome" required>
+    <input type="number" id="numero" placeholder="Número (1-500)" min="1" max="500" required>
+    <button type="submit">Adicionar</button>
+  </form>
+
+  <div style="display: flex; gap: 1rem;">
+    <button onclick="sortear()">Sortear Número</button>
+  </div>
+
+  <div id="resultado"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>Número</th>
+      </tr>
+    </thead>
+    <tbody id="tabela"></tbody>
+  </table>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+    // ✅ COLE AQUI SUA URL E SUA ANON PUBLIC KEY DO SUPABASE
+    const supabaseUrl = "https://pzbzolxtvyxvkaobfvfy.supabase.co";
+    const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6YnpvbHh0dnl4dmthb2JmdmZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg5NjUxOTEsImV4cCI6MjA2NDU0MTE5MX0.2d3N8a5mdOwYXiO_QkG27PD9WehU8Kg4KG6u6AIFTiY";
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const form = document.getElementById("formulario");
+    const tabela = document.getElementById("tabela");
+    const resultado = document.getElementById("resultado");
+
+    let participantes = [];
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const nome = document.getElementById("nome").value.trim();
+      const numero = parseInt(document.getElementById("numero").value);
+
+      if (!nome || isNaN(numero) || numero < 1 || numero > 500) {
+        alert("Preencha um nome válido e um número entre 1 e 500.");
+        return;
+      }
+
+      const { data: existentes, error: erroBusca } = await supabase
+        .from("participantes")
+        .select("numero")
+        .eq("numero", numero);
+
+      if (erroBusca) {
+        alert("Erro ao verificar número: " + erroBusca.message);
+        return;
+      }
+
+      if (existentes.length > 0) {
+        alert(`O número ${numero} já foi escolhido. Escolha outro número.`);
+        return;
+      }
+
+      const { error } = await supabase
+        .from("participantes")
+        .insert([{ nome, numero }]);
+
+      if (error) {
+        alert("Erro ao salvar: " + error.message);
+        return;
+      }
+
+      form.reset();
+      await atualizarTabela();
+    });
+
+    async function atualizarTabela() {
+      const { data, error } = await supabase
+        .from("participantes")
+        .select("*")
+        .order("numero", { ascending: true });
+
+      if (error) {
+        alert("Erro ao carregar participantes: " + error.message);
+        return;
+      }
+
+      participantes = data;
+
+      tabela.innerHTML = "";
+      participantes.forEach(p => {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${p.nome}</td><td>${p.numero}</td>`;
+        tabela.appendChild(row);
+      });
+    }
+
+    window.sortear = async function () {
+      const { data, error } = await supabase
+        .from("participantes")
+        .select("*");
+
+      if (error) {
+        alert("Erro ao buscar dados: " + error.message);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        resultado.textContent = "Nenhum participante encontrado.";
+        return;
+      }
+
+      const sorteado = data[Math.floor(Math.random() * data.length)];
+      resultado.textContent = `Número sorteado: ${sorteado.numero} - ${sorteado.nome}`;
+    }
+
+    document.addEventListener("DOMContentLoaded", atualizarTabela);
+  </script>
+</body>
+</html>
